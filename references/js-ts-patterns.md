@@ -23,9 +23,9 @@ type State<T> =
 
 ```typescript
 // BEFORE
-function move(animal: Fish | Bird) {
+const move = (animal: Fish | Bird) => {
   (animal as Fish).swim(); // Dangerous cast
-}
+};
 
 // AFTER
 const isFish = (pet: Fish | Bird): pet is Fish => {
