@@ -81,30 +81,72 @@ user.posts.recent
 **Smell:** Iterating over a collection and calling an association method on each item without `includes`.
 **Fix:** Use `includes`, `preload`, or `eager_load`. Enable `strict_loading` in development to catch these early.
 
-## 4. Modern Rails 8.0+ Best Practices
+### 3.5 Law of Demeter Violation
+**Smell:** Reaching through multiple associations (e.g., `@invoice.user.profile.address.city`).
+**Fix:** Use `delegate` to provide local access to the required data.
+**Safety check:** Ensure the delegated method exists on the target association.
 
-### 4.1 Redis-less Architecture
+```ruby
+# BEFORE
+@invoice.user.profile.address.city
+
+# AFTER
+# In Invoice model:
+delegate :city, to: :user, prefix: true
+# Usage:
+@invoice.user_city
+```
+
+### 3.6 Default Scope Is Evil
+**Smell:** Using `default_scope` to order or filter records.
+**Fix:** Use explicit named scopes. `default_scope` is difficult to override and often causes unexpected issues in background jobs or migrations.
+
+### 3.7 Check Save Return Value
+**Smell:** Calling `.save` without checking the boolean return value, potentially swallowing validation errors.
+**Fix:** Use `if @model.save` or call `.save!` to raise an exception on failure.
+
+## 4. View & Mailer Best Practices
+
+### 4.1 Move Code into Helper or Decorator
+**Smell:** Complex logical blocks or data transformations inside `.html.erb` or `.html.slim` files.
+**Fix:** Move to a Helper or a Decorator (e.g., Draper) if it involves model-view logic.
+
+### 4.2 Simplify Render Calls
+**Smell:** Verbose render syntax like `render partial: 'user', object: @user`.
+**Fix:** Use shorthand: `render @user`.
+
+### 4.3 Move Mailer Logic into Mailer
+**Smell:** Building complex strings or performing lookups in the controller before passing data to the Mailer.
+**Fix:** Move the logic into the Mailer class; the controller should only pass the necessary IDs or simple objects.
+
+### 4.4 Restrict Auto-generated Routes
+**Smell:** `resources :users` when only `index` and `show` are used.
+**Fix:** Use `only:` or `except:` to limit routes: `resources :users, only: [:index, :show]`.
+
+## 5. Modern Rails 8.0+ Best Practices
+
+### 5.1 Redis-less Architecture
 **Smell:** Defaulting to Redis for every background job or cache.
 **Fix:** Use **Solid Queue**, **Solid Cache**, and **Solid Cable** to reduce infrastructure complexity.
 
-### 4.2 Built-in Authentication
+### 5.2 Built-in Authentication
 **Smell:** Pulling in `Devise` for a simple app with standard auth needs.
 **Fix:** Use the Rails 8 `rails generate authentication` command for a lightweight, built-in solution.
 
-### 4.3 Hotwire over SPAs
+### 5.3 Hotwire over SPAs
 **Smell:** Reaching for React/Vue for a feature that can be handled by **Turbo** and **Stimulus**.
 **Fix:** Use Hotwire to keep logic in the monolith and maintain "The Rails Way."
 
-## 5. Naming & Syntax Noise
+## 6. Naming & Syntax Noise
 
-### 5.1 Verb-Inflation Cluster
+### 6.1 Verb-Inflation Cluster
 **Smell:** `do_process`, `execute_action`, `perform_task` for the same concept.
 **Fix:** Standardize: `call` for services, `handle` for events, `process` for pipelines.
 
-### 5.2 Enterprise Suffixes
+### 6.2 Enterprise Suffixes
 **Smell:** `EmailManager`, `PaymentProcessor`, `NotificationCoordinator` for simple classes.
 **Fix:** Use specific, action-oriented names: `EmailSender`, `PaymentCapture`, `NotificationDispatcher`.
 
-### 5.3 Explicit Return
+### 6.3 Explicit Return
 **Smell:** Explicit `return` at the end of every Ruby method.
 **Fix:** Rely on implicit returns; use explicit `return` only for early exits (Guard Clauses).
