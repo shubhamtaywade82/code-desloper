@@ -1,121 +1,147 @@
 # JavaScript / TypeScript / React — AI Slop Patterns & Idiomatic Fixes
 
-## Function vs Class Anti-Patterns
+## 1. TypeScript & Type Safety
 
-### 1. One-Method Manager Class
-**Smell:** A class with one public method that wraps a single fetch call.
-**Fix:** Replace with a plain async function.
-**Safety check:** Ensure no internal state, no inheritance, no event listeners attached.
+### 1.1 The `any` Crutch
+**Smell:** Using `any` to bypass the type system.
+**Fix:** Use `unknown` with type narrowing (Zod, Type Guards).
+**Safety check:** Ensure runtime validation is present if the data source is external.
 
 ```typescript
 // BEFORE (AI slop)
-class ApiManager {
-  async fetchUsers() {
-    return fetch("/api/users").then(r => r.json());
-  }
+function processUser(data: any) {
+  console.log(data.id.toUpperCase()); // Runtime error if id is missing or not a string
 }
-const users = await new ApiManager().fetchUsers();
 
 // AFTER (idiomatic)
-export const fetchUsers = async () => {
-  const res = await fetch("/api/users");
-  return res.json();
-};
+interface User { id: string; }
+function processUser(data: unknown) {
+  if (data && typeof data === 'object' && 'id' in data && typeof data.id === 'string') {
+    console.log(data.id.toUpperCase());
+  }
+}
 ```
 
-### 2. Redundant DTOs
-**Smell:** TypeScript interfaces that mirror API responses exactly with no transformation.
-**Fix:** Remove unless boundary mapping is needed (different field names, computed fields, validation).
-**Safety check:** Check if the DTO is used for zod validation, form handling, or presentation logic.
-
-### 3. Pointless Type Wrappers
-**Smell:** `type UserId = string;` used once, or interfaces that only repeat inference.
-**Fix:** Delete. Use inline types or inference.
-**Safety check:** Ensure the alias is not used for documentation or to prevent primitive obsession across the codebase.
-
-## React Anti-Patterns
-
-### 4. Empty Wrapper Components
-**Smell:** Component that only renders children with no logic, no styling, no context.
-**Fix:** Remove and pass children directly to the parent.
-**Safety check:** Check if the wrapper adds `data-testid`, event handlers, or ref forwarding.
-
-```tsx
-// BEFORE
-const CardWrapper = ({ children }) => <div>{children}</div>;
-
-// AFTER
-// Use <div> directly or the parent component's own container.
-```
-
-### 5. Redundant useMemo / useCallback
-**Smell:** `useMemo` with empty or static dependencies, or memoizing a value that is cheap to compute.
-**Fix:** Remove. React's re-render is often cheaper than memoization overhead.
-**Safety check:** Verify the dependency array is actually static and the computation is not expensive.
-
-```tsx
-// BEFORE
-const label = useMemo(() => `${user.firstName} ${user.lastName}`, [user.firstName, user.lastName]);
-
-// AFTER
-const label = `${user.firstName} ${user.lastName}`;
-```
-
-### 6. Derived State
-**Smell:** `useState` for a value that can be computed from props or other state.
-**Fix:** Compute at render time. Use `useMemo` only if the computation is genuinely expensive.
-**Safety check:** Ensure the derived value does not need to be stable for reference equality (e.g., as a `useEffect` dependency).
-
-### 7. Prop Drilling Through Abstraction Layers
-**Smell:** Props passed through 3+ components to reach a leaf, with no intermediate usage.
-**Fix:** Use context, composition, or move the component closer to the data.
-**Safety check:** Ensure the intermediate components are not also used in other contexts where the prop matters.
-
-## Control Flow Anti-Patterns
-
-### 8. Nested If-Else Pyramid
-**Smell:** Deeply nested conditionals from generated code.
-**Fix:** Flatten with early returns, guard clauses, or pattern matching.
-**Safety check:** Preserve all edge cases and error handling paths.
+### 1.2 "Stringly" Typing
+**Smell:** Using `string` for variables with a discrete set of valid values.
+**Fix:** Use Union Types or Template Literal Types.
 
 ```typescript
 // BEFORE
-function process(data) {
+type Status = string; // "loading", "success", "error"
+
+// AFTER
+type Status = 'loading' | 'success' | 'error';
+```
+
+### 1.3 Discriminated Unions for State
+**Smell:** "Boolean Soup" (e.g., `{ isLoading: boolean, error: string | null }`).
+**Fix:** Use a discriminated union to represent mutually exclusive states.
+
+```typescript
+// BEFORE
+interface State { isLoading: boolean; error: string | null; data: any; }
+
+// AFTER
+type State<T> = 
+  | { status: 'loading' }
+  | { status: 'error'; message: string }
+  | { status: 'success'; data: T };
+```
+
+### 1.4 Numeric Enums
+**Smell:** Standard `enum` which can accept arbitrary numbers.
+**Fix:** Use `as const` objects or String Unions.
+
+```typescript
+// BEFORE
+enum Direction { Up, Down }
+
+// AFTER
+const Direction = { Up: 'UP', Down: 'DOWN' } as const;
+type Direction = typeof Direction[keyof typeof Direction];
+```
+
+## 2. React Anti-Patterns
+
+### 2.1 Redundant useMemo / useCallback
+**Smell:** Memoizing trivial values or functions without a performance bottleneck.
+**Fix:** Remove. React's re-render is often cheaper than memoization overhead.
+
+### 2.2 Derived State
+**Smell:** Syncing props to state using `useEffect`.
+**Fix:** Compute at render time.
+
+```tsx
+// BEFORE
+const [fullName, setFullName] = useState('');
+useEffect(() => { setFullName(`${first} ${last}`); }, [first, last]);
+
+// AFTER
+const fullName = `${first} ${last}`;
+```
+
+### 2.3 Object/Array Props as Dependencies
+**Smell:** Passing an inline object `style={{ color: 'red' }}` to a memoized component.
+**Fix:** Move outside the component or use `useMemo`.
+
+## 3. AI-Specific Logic Smells
+
+### 3.1 Async Array Callback Trap
+**Smell:** Mapping over an array with an async function and forgetting `Promise.all`.
+**Fix:** Use `Promise.all`.
+
+```typescript
+// BEFORE (Returns array of Promises)
+const results = items.map(async (item) => await process(item));
+
+// AFTER
+const results = await Promise.all(items.map(item => process(item)));
+```
+
+### 3.2 Silent Error Swallowing
+**Smell:** Empty `catch (e) {}` blocks.
+**Fix:** Always log, report, or handle the error.
+
+### 3.3 Deep Nesting vs. Guard Clauses
+**Smell:** Deeply nested `if/else` structures.
+**Fix:** Use early returns (Guard Clauses).
+
+```typescript
+// BEFORE
+function save(data) {
   if (data) {
-    if (data.items) {
-      if (data.items.length > 0) {
-        return data.items.map(...);
-      } else {
-        return [];
-      }
-    } else {
-      return [];
+    if (data.isValid) {
+      // Logic...
     }
-  } else {
-    return [];
   }
 }
 
 // AFTER
-function process(data) {
-  if (!data?.items?.length) return [];
-  return data.items.map(...);
+function save(data) {
+  if (!data || !data.isValid) return;
+  // Logic...
 }
 ```
 
-### 9. Callback Pyramid
-**Smell:** Nested `.then()` chains or callback hell.
-**Fix:** Convert to `async/await` with `try/catch`.
-**Safety check:** Ensure error handling and promise rejection paths are preserved.
+## 4. Architectural Smells
 
-## Utility Anti-Patterns
+### 4.1 One-Method Manager Class
+**Smell:** A class with one public method that wraps a single fetch call.
+**Fix:** Replace with a plain async function.
 
-### 10. Utility Duplication
-**Smell:** `formatDate`, `capitalize`, `slugify` defined in multiple files.
-**Fix:** Consolidate into a single `utils/` or `lib/` module.
-**Safety check:** Verify implementations are identical (not slightly different for locale/format reasons).
+### 4.2 Utility Duplication
+**Smell:** `formatDate` defined in multiple files.
+**Fix:** Consolidate into a shared utility module.
 
-### 11. Vague Naming in Utilities
-**Smell:** `helpers.ts` with `doThing`, `handleStuff`, `processData`.
-**Fix:** Rename to specific actions: `parseCSV`, `validateEmail`, `buildQueryString`.
-**Safety check:** Update all imports and call sites. Use arrow functions, latest syntax, and follow project linting rules.
+### 4.3 Redundant DTOs
+**Smell:** Interfaces that mirror API responses exactly with no transformation.
+**Fix:** Remove unless mapping is required.
+
+## 5. Output Consistency
+**Rules for Cleanup:**
+- Use **Arrow Functions** for components and utilities.
+- Use **ES6+ features** (optional chaining `?.`, nullish coalescing `??`).
+- Trust **Type Inference** for simple assignments.
+- Annotate **Public API** return types and parameters.
+- **Co-locate** types with logic.
