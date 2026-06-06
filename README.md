@@ -1,44 +1,108 @@
-# Code Deslopper — AI Code Cleanup & Refactor
+# Code Deslopper
 
-Semantic code cleanup and refactoring assistant that removes AI-generated code smells, unnecessary abstractions, duplication, and framework misuse from Ruby/Rails, JavaScript, TypeScript, and React codebases while preserving observable behavior.
+A semantic code cleanup and refactoring skill for AI agents. Removes AI-generated slop while preserving behavior.
 
-## Overview
+## What is this?
+Code Deslopper is an Agent Skill that turns your AI coding agent into a conservative, framework-aware refactoring expert. It detects and removes:
+- Unnecessary abstractions (one-method services, fake inheritance chains)
+- Duplicated logic across files
+- Verbose "enterprise" patterns (Manager/Processor/Handler/Coordinator)
+- Dead code, unused parameters, placeholder TODOs
+- Confusing naming clusters (do_process, execute_action, perform_task)
+- Framework misuse (Rails concerns used once, redundant React hooks, pointless TypeScript wrappers, premature Go interfaces, Python ABC overkill)
 
-Code Deslopper is an **Agent Skill** designed to help developers clean up "code slop" — the verbose, redundant, or non-idiomatic code often produced by AI assistants. It follows a safety-first, two-phase workflow: **Detect** then **Refactor**.
+## Why "Deslopper"?
+Because AI-generated code often comes with slop: boilerplate, fake layers, and over-engineering that a human would never write. This skill cleans it up — semantically, not just stylistically.
 
-## Key Features
+## Target Stacks
+- Ruby / Ruby on Rails
+- JavaScript / TypeScript
+- React / Next.js
+- Node.js
+- Python / FastAPI / Flask
+- Go (Golang)
 
-- **Semantic Awareness:** Understands the difference between a necessary Rails callback and a redundant AI-generated wrapper.
-- **Safety-First:** Uses a risk-scoring system (1–5) to categorize smells and requires explicit approval for high-risk changes.
-- **Framework-Specific:** Includes deep knowledge of Ruby on Rails, React, and TypeScript idioms.
-- **Two-Phase Workflow:** Prevents "blind" refactoring by requiring a detection report before any code is touched.
+## Core Principles
+- **Preserve behavior** — If it changes behavior, flag it. Never silently edit.
+- **Prove safety** — Usage analysis, test coverage, or dependency proof required.
+- **Framework-aware** — Rails rules ≠ JS rules. Each stack has its own cleanup logic.
+- **Test-backed** — Every cleanup includes test impact notes.
+
+## How It Works
+
+### Phase 1: Smell Detection
+- Scan file tree / changed files
+- Parse AST-level patterns
+- Classify smells with risk scores (1–5)
+- Skip ambiguous or untested code
+
+### Phase 2: Refactor Generation
+- Plan minimal safe transformations
+- Output structured patch/diff
+- Assess regression risks
+- Advise on test targets
+
+## Skill Structure
+```plain
+code-deslopper/
+├── SKILL.md                          # Main instructions (loads on activation)
+├── references/
+│   ├── ruby-rails-patterns.md        # Rails-specific anti-patterns
+│   ├── js-ts-patterns.md             # JS/TS/React anti-patterns
+│   ├── python-patterns.md            # Python-specific anti-patterns
+│   ├── go-patterns.md                # Go-specific anti-patterns
+│   └── safety-checklist.md           # Pre-refactor guardrails
+└── scripts/
+    └── smell-detector.py             # Optional CLI smell scanner
+```
 
 ## Installation
 
-### For Gemini CLI / Agent Skills compatible agents
-Copy the `SKILL.md` and the `references/` directory into your agent's skills path or use the provider directly.
+### Claude Code
+```bash
+/plugin marketplace add your-org/code-deslopper
+```
 
-### For Cursor
-Copy `SKILL.md` into `.cursor/rules/code-deslopper.md`.
+### Cursor
+Copy `SKILL.md` content into `.cursor/rules/code-deslopper.md`.
 
-## Directory Structure
+### Generic Agent Skills Client
+```bash
+git clone https://github.com/your-org/code-deslopper.git
+# Point your agent's skills provider to this directory
+```
 
-- `SKILL.md`: Core instructions for the agent.
-- `references/`: Detailed pattern guides.
-    - `ruby-rails-patterns.md`: Rails-specific anti-patterns.
-    - `js-ts-patterns.md`: JS/TS/React anti-patterns.
-    - `python-patterns.md`: Python-specific anti-patterns.
-    - `go-patterns.md`: Go-specific anti-patterns.
-    - `safety-checklist.md`: Pre-refactor safety guardrails.
-- `scripts/`: Optional tools.
-    - `smell-detector.py`: CLI tool for scanning codebases.
+## Usage Example
+**User:** "Clean up this AI-generated Rails code."
 
-## Usage
+**Agent (using Code Deslopper):**
+1. Scans the repo and detects:
+   - `UserRegistrationService` (trivial, risk 2)
+   - `OrderProcessor` + `OrderHandler` (fragmented, risk 3)
+   - `BaseService` inheritance chain (fake, risk 3)
+2. Presents smell report with risk scores.
+3. After approval, generates patches:
+   - Collapses `UserRegistrationService` into model method
+   - Merges order classes into single transaction object
+   - Removes `BaseService` chain, inlines shared logic
+4. Outputs test impact and risk notes.
 
-1. **Activate the skill** (e.g., `activate_skill code-deslopper`).
-2. **Phase 1: Detect** - Ask the agent to analyze a file or directory for smells.
-3. **Phase 2: Refactor** - Review the report and approve specific refactors.
+## Output Format
+Every response follows this structure:
+- **## Cleanup Summary**
+- **## Smells Found**
+- **## Safe Refactor Plan**
+- **## Proposed Patch**
+- **## Test Impact**
+- **## Risk Notes**
+
+## Safety Rules
+
+| Action | Rule |
+|---|---|
+| **Proceed** | Risk ≤2, tests exist, local change, no API/hook touched |
+| **Ask** | Risk 3, cross-file, partial tests, callbacks involved |
+| **Stop** | Risk ≥4, no tests, touches auth/payment/billing, public API change |
 
 ## License
-
 MIT

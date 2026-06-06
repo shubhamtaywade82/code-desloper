@@ -1,29 +1,54 @@
-# MCP Market Listing: Code Deslopper
+# MCP Market Listing — Code Deslopper
 
 **Title:** Code Deslopper — AI Code Cleanup & Refactor Skill
-
 **Category:** Developer Tools
+**Version:** 1.0
+**License:** MIT
 
-**Description:**
-Code Deslopper is a semantic cleanup tool that helps developers maintain clean, idiomatic codebases in the age of AI-assisted development. It identifies and removes common "AI slop" patterns such as:
-- Over-engineered service objects in Rails and Python.
-- Redundant `useMemo`/`useCallback` hooks in React.
-- Premature interface abstractions in Go.
-- Fake abstraction layers and placeholder scaffolding.
-- Inconsistent naming and duplicated logic.
+## Description
+A semantic code cleanup skill that removes AI-generated slop, unnecessary abstractions, duplicated logic, and framework misuse from Ruby/Rails, JavaScript, TypeScript, React, Python, and Go codebases — while strictly preserving observable behavior.
 
-**Features:**
-- **Safety First:** Built-in safety checklist and risk assessment guide.
-- **Behavior Preservation:** Focuses on refactoring that maintains identical observable behavior.
-- **Automated Scanning:** Includes a python-based smell detector for quick codebase analysis.
-- **Structured Reports:** Provides clear, actionable reports before any changes are made.
+## Key Features
+- **Behavior-first refactoring:** Never changes behavior without flagging it
+- **Two-phase workflow:** Detect smells → Generate safe patches
+- **Framework-aware:** Rails/Python conventions respected; JS/TS/Go idioms enforced
+- **Risk scoring:** 1–5 scale with clear proceed/ask/stop rules
+- **Test impact notes:** Every cleanup includes what to test
+- **Structured output:** Summary, smells, plan, patch, tests, risks
 
-**Instructions:**
-1. Point your agent's Skill Provider to the repository.
-2. Activate the skill using `activate_skill code-deslopper`.
-3. Run an analysis on your source directory.
+## Supported Stacks
+- Ruby / Ruby on Rails
+- JavaScript / TypeScript
+- React / Next.js
+- Node.js
+- Python / FastAPI / Flask
+- Go (Golang)
 
-**Safety Rules:**
-- Never refactors high-risk (Score 3+) items without explicit confirmation.
-- Prioritizes existing test coverage as a safety net.
-- Preserves all public API contracts.
+## What It Removes
+- One-method service/manager/handler classes
+- Fake BaseService inheritance chains
+- Duplicated functions, validations, utilities
+- Empty wrapper components & redundant React hooks
+- Nested if-else pyramids & callback hell
+- Over-commenting & inconsistent naming clusters
+- Redundant TypeScript types & pointless DTOs
+- Unnecessary Rails concerns & scope confusion
+- Premature abstractions in Go & Python ABC overkill
+
+## Safety Guardrails
+- Public APIs, auth, validations, and business rules are protected
+- Side effects (DB, network, jobs) are preserved in order
+- Framework hooks (callbacks, middleware) are never bypassed
+- No cleanup without usage proof or test coverage
+- Risk-score ≥3 requires explicit approval
+
+## Installation
+Compatible with any Agent Skills-compatible client (Claude Code, Cursor, Gemini CLI, Codex, etc.). Install as a skill folder with `SKILL.md` + `references/` + optional `scripts/`.
+
+## Usage
+Activate when:
+- Cleaning up AI-generated PRs
+- Refactoring over-engineered code
+- Removing dead code and ghost files
+- Consolidating duplicated logic
+- Preparing code for production review
