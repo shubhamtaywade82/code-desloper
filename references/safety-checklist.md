@@ -1,46 +1,132 @@
 # Safety Checklist — Pre-Refactor Guardrails
 
-Use this checklist before approving any cleanup. If any item is "unknown," flag the change for human review.
+Complete this checklist before approving any refactor. If any item is "unknown," flag for human review.
 
 ## Behavior Preservation Checklist
+
 - [ ] I can trace every call site of the code being removed or changed.
 - [ ] Tests exist and cover the affected paths (unit, integration, or request spec).
 - [ ] No public API signatures are changing (method names, params, return types).
 - [ ] No framework hooks (callbacks, middleware, observers, decorators) are being bypassed.
 - [ ] No authorization or validation logic is being moved, reordered, or removed.
 - [ ] Side effects (DB writes, network calls, job enqueuing, file I/O) are preserved in the same order.
-- [ ] The refactor is local (≤2 files) or I have verified all cross-file dependencies.
+- [ ] The refactor is local (≤ 2 files) or all cross-file dependencies have been verified.
+- [ ] Transaction boundaries are preserved (no inlining past `ActiveRecord::Base.transaction`).
+
+---
 
 ## Risk Scoring Guide
 
 | Score | Meaning | Action |
 |---|---|---|
-| **1** | Pure deletion of dead code. No call sites. No side effects. | Proceed automatically. |
-| **2** | Inline trivial wrapper. Tests exist. No API change. | Proceed with diff output. |
-| **3** | Consolidate duplication. Tests exist. Minor cross-file. | Proceed with caution; note test targets. |
-| **4** | Restructure service/controller flow. Tests partial. | Ask for approval; provide full risk analysis. |
-| **5** | Touch callbacks, validations, auth, or public APIs. | Stop. Flag for human review only. |
+| 1 | Pure deletion of dead code. No call sites. No side effects. | Proceed automatically. |
+| 2 | Inline trivial wrapper. Tests exist. No API change. | Proceed with diff output. |
+| 3 | Consolidate duplication. Tests exist. Minor cross-file. | Proceed with caution; note test targets. |
+| 4 | Restructure service/controller flow. Tests partial. | Ask for approval; full risk analysis. |
+| 5 | Touch callbacks, validations, auth, public APIs, security. | Stop. Flag for human review only. |
+
+---
 
 ## Framework-Specific Safety Rules
 
 ### Rails
-- Never remove a `before_action` without checking all controller actions that rely on it.
-- Never inline a concern without greping for `include` across the entire repo.
-- Never collapse a service that wraps `ActiveRecord::Base.transaction` without preserving the transaction boundary.
-- Never remove a scope that might be used in a chain (`Model.scope_a.scope_b`).
-- Never rename a route helper without checking `link_to`, `redirect_to`, `url_for`, and mailer views.
 
-### React / JS
+- Never remove a `before_action` without checking all controller actions that rely on it.
+- Never inline a concern without `grep`-ing for `include MyConcern` across the entire repo.
+- Never collapse a service that wraps `ActiveRecord::Base.transaction` without preserving the boundary.
+- Never remove a `scope` that might be used in a chain (`Model.scope_a.scope_b`).
+- Never rename a route helper without checking `link_to`, `redirect_to`, `url_for`, and mailer views.
+- Never convert `after_commit` back to `after_save` — the direction is one-way for safety.
+- Never add `default_scope` as a "simplification" — it's a risk multiplier.
+- Never use `update_attribute` or `update_columns` as a "fix" — they bypass validations.
+- Check all `is_a?`, `kind_of?`, and `instance_of?` checks before deleting or renaming a class.
+
+### React / JS / TS
+
 - Never remove a `useEffect` without checking all dependency implications.
 - Never inline a custom hook without checking if it is used in multiple components.
-- Never remove `memo` or `PureComponent` without profiling or confirming no parent re-render issues.
+- Never remove `React.memo` or `PureComponent` without profiling or confirming no re-render issues.
 - Never flatten nested `if` statements without preserving all `else` error paths.
-- Never consolidate utilities with different locale, timezone, or formatting behavior.
+- Never consolidate utilities with different locale, timezone, or formatting behavior (check implementations are byte-for-byte identical).
+- Never remove a `useRef` — refs often carry DOM or timer state that doesn't cause re-renders.
+- Never change a `useCallback` dependency array without verifying stale closure behavior.
+
+---
+
+## Proving a Method is Unused
+
+Before deleting any method, verify all of these:
+
+```bash
+# 1. Direct call sites
+grep -r "method_name" app/ spec/ lib/ config/
+
+# 2. Dynamic dispatch (Ruby)
+grep -r "send(:method_name" app/ spec/
+grep -r "public_send(:method_name" app/ spec/
+
+# 3. Symbol references (routes, serializers, etc.)
+grep -r "method_name" app/ --include="*.yml" --include="*.json"
+
+# 4. Solargraph unused scan
+solargraph scan --unused
+
+# 5. Test coverage gap check
+grep -r "method_name" spec/
+```
+
+If any of these return hits you cannot trace → flag, do not delete.
+
+---
 
 ## Red Flags — Stop and Ask
-- The code has no tests and is >50 lines.
+
+- The code has no tests and is > 50 lines.
 - The code uses `eval`, `send`, `method_missing`, or dynamic method definition.
 - The code is in a `lib/` or `vendor/` directory with unclear ownership.
 - The PR description says "generated by AI" but no human has reviewed it.
-- The cleanup would change a method signature used in >3 files.
+- The cleanup would change a method signature used in > 3 files.
 - The code interacts with payment, authentication, or billing logic.
+- The code uses metaprogramming (`define_method`, `class_eval`, `instance_exec`).
+- The code is called from background jobs (Sidekiq, GoodJob) — side effects differ from web context.
+- The code touches STI (Single Table Inheritance) or polymorphic associations.
+- The code is in a shared engine or mountable gem.
+
+---
+
+## Safe Refactor Order
+
+When a refactor touches multiple files, always apply in this order:
+
+1. **Add** the new code (new method, new scope, new class).
+2. **Redirect** all callers to the new code (update call sites one at a time).
+3. **Verify** tests pass after each redirection.
+4. **Delete** the old code only when all callers are redirected and tests are green.
+
+This keeps the codebase in a working state throughout — no big-bang rewrites.
+
+---
+
+## YARD Safety During Refactor
+
+When refactoring a method that has YARD documentation:
+
+- [ ] Update `@param` types if parameter types changed.
+- [ ] Update `@return` type if return type changed.
+- [ ] Remove `@raise` tags for exceptions that are no longer raised.
+- [ ] Add `@raise` tags for new exceptions.
+- [ ] Update `@example` if the call signature changed.
+- [ ] If the method is deleted, delete its YARD docs too (no ghost docs).
+- [ ] If a method is renamed, update all `@see`, `@note`, and cross-references.
+
+---
+
+## After Refactoring — Verification Checklist
+
+- [ ] All tests pass: `bundle exec rspec` / `npm test`
+- [ ] No new Brakeman warnings: `brakeman -A`
+- [ ] No new RuboCop violations: `rubocop --only Metrics,Style,Layout`
+- [ ] Schema is up to date: `rails db:migrate:status` (all up)
+- [ ] No orphaned files: deleted class files removed from `autoload_paths`
+- [ ] Git diff is minimal: change touches only the intended files
+- [ ] Reviewer has approved risk-3+ changes before merge

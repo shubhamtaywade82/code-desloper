@@ -1,12 +1,11 @@
-# Ruby & Rails — AI Slop Patterns & Idiomatic Fixes
+# Ruby / Rails — AI Slop Patterns, Best Practices & Idiomatic Fixes
 
-## 1. Service Object Anti-Patterns
+## SERVICE OBJECTS
 
-### 1.1 Trivial Single-Method Service
-
-**Smell:** `UserRegistrationService` with only a `call` method that delegates to `User.create`.
-**Fix:** Collapse into model method or controller flow if no orchestration is needed.
-**Safety check:** Ensure no transaction wrapping, no multi-model coordination, no external API calls.
+### 1. Trivial Single-Method Service → Inline It
+**Smell:** `call` delegates to a single AR method with no orchestration.
+**Fix:** Move to model method or controller flow.
+**Safety:** No transaction, no multi-model coordination, no external call.
 
 ```ruby
 # BEFORE (AI slop)
@@ -16,115 +15,53 @@ class UserRegistrationService
   end
 end
 
-# AFTER (idiomatic)
-# In controller:
-user = User.create(user_params)
+# AFTER
+user = User.create(user_params)  # in controller
 ```
 
-### 1.2 Fragmented Orchestration
-
-**Smell:** `OrderProcessor`, `OrderHandler`, `OrderManager` each doing one step of a single logical process.
-**Fix:** Merge into a single Service Object (PORO) that handles the transaction and sequence explicitly.
-**Safety check:** Verify each step's side effects and ensure proper rollback behavior within a transaction.
-
-### 1.3 Fake Inheritance Chain
-
-**Smell:** `BaseService` → `ApplicationService` → `UserService` with no actual polymorphism or shared logic.
-**Fix:** Delete the chain. Use Plain Old Ruby Objects (POROs) and modules for shared concerns.
-
-### 1.4 Tell, Don't Ask (Encapsulation)
-
-**Smell:** Reaching into an object's state to make a decision (`if user.admin? && user.active?`).
-**Fix:** Move the decision logic into the object itself.
-**Safety check:** Ensure the new method doesn't introduce circular dependencies.
+### 2. Fragmented Orchestration → Merge into One Transaction
+**Smell:** `Processor`, `Handler`, `Manager` each doing one step of the same workflow.
+**Fix:** One transaction object with explicit steps.
+**Safety:** Verify each step's side effects and rollback behavior.
 
 ```ruby
 # BEFORE
-if user.status == 'active' && user.subscription_valid?
-  # do something
-end
+OrderProcessor.new(order).validate
+OrderHandler.new(order).charge
+OrderManager.new(order).notify
 
 # AFTER
-# In User model:
-def can_access_content?
-  status == 'active' && subscription_valid?
-end
-
-# Usage:
-if user.can_access_content?
-  # do something
-end
+OrderCheckout.new(order).call  # single transaction, explicit steps inside
 ```
 
-### 1.5 `after_commit` vs `after_save`
-**Smell:** Triggering background jobs or cache invalidation in `after_save`.
-**Fix:** Use `after_commit` (or `after_create_commit`) to ensure the DB transaction has finished before the job starts. This prevents "RecordNotFound" errors in workers.
-
-### 1.6 Complex Creation Factory Method
-**Smell:** Complex object instantiation logic inside a controller or service.
-**Fix:** Move to a factory method in the model (e.g., `User.register_with_profile(params)`).
-
-## 2. Controller & Routing Anti-Patterns
-
-### 2.1 The "God" Controller (Custom Actions)
-**Smell:** Controllers with many custom actions like `publish`, `unpublish`, `archive`, `feature`.
-**Fix:** Follow "Boring REST." Create new resources and controllers (e.g., `PublishedPostsController`, `ArchivesController`).
-**Safety check:** Ensure routing remains clean and follows standard Rails conventions.
-
-### 2.2 Needless Deep Nesting
-**Smell:** Routes nested more than 2 levels deep (e.g., `resources :users do resources :posts do resources :comments`).
-**Fix:** Use shallow nesting. Only the collection needs the parent ID; the member actions can stand alone.
+### 3. Fake Inheritance Chain → Delete It
+**Smell:** `BaseService → ApplicationService → UserService` with no polymorphism.
+**Fix:** Delete the chain. Use modules for shared behavior.
+**Safety:** Check `is_a?(BaseService)` and `super` calls.
 
 ```ruby
 # BEFORE
-resources :users do
-  resources :posts do
-    resources :comments
+class BaseService; end
+class ApplicationService < BaseService; end
+class UserService < ApplicationService
+  def call = User.create(params)
+end
+
+# AFTER — module for shared behavior only if truly shared
+module Callable
+  def self.included(base)
+    base.extend(ClassMethods)
   end
-end
-
-# AFTER
-resources :users do
-  resources :posts, shallow: true do
-    resources :comments, shallow: true
+  module ClassMethods
+    def call(*args, **kwargs) = new(*args, **kwargs).call
   end
 end
 ```
 
-### 2.3 Simplify Render in Controllers
-**Smell:** Verbose render syntax like `render :action => "new"` or `render :template => "users/show"`.
-**Fix:** Use the simplified syntax: `render :new` or `render "users/show"`.
-
-### 2.4 Repeated Param Sanitization
-**Smell:** `params[:foo].to_s.strip` repeated across multiple controllers.
-**Fix:** Use Strong Parameters effectively or move to a Form Object for complex multi-model inputs.
-
-### 2.5 Implicit Side Effects in Callbacks
-**Smell:** Using `after_save` or `after_commit` to send emails, sync to external APIs, or trigger heavy background jobs.
-**Fix:** Move these side effects to a Service Object or an explicit workflow step. Callbacks should be reserved for data integrity and internal state consistency.
-
-
-## 3. Model & Query Anti-Patterns
-
-### 3.1 Fat Model Syndrome
-
-**Smell:** 1000+ line models containing business logic, query logic, and formatting helpers.
-**Fix:**
-
-- Move query logic to **Query Objects**.
-- Move business orchestration to **Service Objects**.
-- Move presentation logic to **ViewComponents** or **Decorators**.
-- Move complex multi-model validation to **Form Objects**.
-
-### 3.2 Unnecessary Concerns
-
-**Smell:** A `Concern` used in only one model, or one that is just a dumping ground for unrelated methods.
-**Fix:** Inline back into the model until reuse is actually required across ≥2 models.
-
-### 3.3 Scope vs. Service Confusion
-
-**Smell:** Service object that only builds a `where` chain.
-**Fix:** Convert to a model `scope`.
+### 4. Service That Only Builds a Query → Model Scope
+**Smell:** Service returns only an AR relation with `where` chain.
+**Fix:** Named model scope.
+**Safety:** Check if service adds pagination, auth, or other non-query logic.
 
 ```ruby
 # BEFORE
@@ -134,239 +71,495 @@ class RecentPostsService
   end
 end
 
-# AFTER
-# In Post model:
+# AFTER — in Post model
 scope :recent, -> { where("created_at > ?", 1.week.ago).order(created_at: :desc) }
-# In controller:
-user.posts.recent
+# Usage: user.posts.recent
 ```
 
-### 3.4 The N+1 Performance Killer
-**Smell:** Iterating over a collection and calling an association method on each item without `includes`.
-**Fix:** Use `includes`, `preload`, or `eager_load`. Enable `strict_loading` in development to catch these early.
+### 5. Enterprise Suffix Abuse → Rename to Intent
+**Smell:** `EmailManager`, `OrderCoordinator`, `UserHandler` for trivial work.
+**Fix:** Rename to what it does: `EmailSender`, `PaymentCapture`, `ReportGenerator`.
+**Safety:** Check for constant references in strings and metaprogramming.
 
-### 3.5 Law of Demeter Violation
-**Smell:** Reaching through multiple associations (e.g., `@invoice.user.profile.address.city`).
-**Fix:** Use `delegate` to provide local access to the required data.
-**Safety check:** Ensure the delegated method exists on the target association.
+---
+
+## CONTROLLERS
+
+### 6. Direct AR Load Without Ownership Scoping (IDOR)
+**Smell:** Loads record by ID without scoping to current user.
+**Fix:** Scope to `current_user.association`.
+
+```ruby
+# BEFORE — IDOR vulnerability
+def show
+  @post = Post.find(params[:id])
+  return head :forbidden unless @post.user == current_user
+end
+
+# AFTER
+def show
+  @post = current_user.posts.find(params[:id])  # raises RecordNotFound if not owned
+end
+```
+
+### 7. Repeated Record Loading → Before Action
+**Smell:** Same `find` call in multiple actions.
+**Fix:** `before_action`.
 
 ```ruby
 # BEFORE
-@invoice.user.profile.address.city
+def show  = @post = current_user.posts.find(params[:id])
+def edit  = @post = current_user.posts.find(params[:id])
+def update = @post = current_user.posts.find(params[:id])
 
 # AFTER
-# In Invoice model:
-delegate :city, to: :user, prefix: true
-# Usage:
-@invoice.user_city
+before_action :set_post, only: [:show, :edit, :update, :destroy]
+private
+def set_post = @post = current_user.posts.find(params[:id])
 ```
 
-### 3.6 Default Scope Is Evil
-**Smell:** Using `default_scope` to order or filter records.
-**Fix:** Use explicit named scopes. `default_scope` is difficult to override and often causes unexpected issues in background jobs or migrations.
-
-### 3.7 Check Save Return Value
-**Smell:** Calling `.save` without checking the boolean return value, potentially swallowing validation errors.
-**Fix:** Use `if @model.save` or call `.save!` to raise an exception on failure.
-
-### 3.8 Use `Time.zone.now`
-**Smell:** Using `Time.now` or `Date.today`.
-**Fix:** Always use `Time.zone.now` or `Date.current` to ensure the application respects the configured Rails time zone.
-
-### 3.9 Batched Finders for Large Collections
-**Smell:** Calling `.all.each` on a table with thousands of records.
-**Fix:** Use `find_each` to load records in batches and prevent memory bloat.
-
-### 3.10 Virtual Attributes for Complex Forms
-**Smell:** Manually updating multiple attributes or related models in a controller.
-**Fix:** Use virtual attributes (accessors) in the model and override the setter to distribute data.
-
-### 3.11 Query Attributes (? Methods)
-**Smell:** Checking `if user.role == 'admin'` or `if user.admin_flag == true`.
-**Fix:** Use Rails query attributes. Rails automatically provides `?` methods for boolean columns and Enums.
-
-### 3.12 Proper Enum Usage
-**Smell:** Hand-rolled state management using strings or integers without Rails Enums.
-**Fix:** Use `enum` for state/role fields to get automatic scopes and query methods.
-
-### 3.13 Safe SQL & Constantize
-**Smell:** Interpolating user input into SQL strings or calling `constantize` on user-provided strings.
-**Fix:** Use parameterized queries and whitelist allowed constants.
+### 8. Business Logic in Action → Service or Model
+**Smell:** Controller action has > 1 meaningful method call plus conditionals.
+**Fix:** Delegate to a service object.
 
 ```ruby
 # BEFORE
-User.where("name = '#{params[:name]}'")
-params[:model].constantize.find(id)
-
-# AFTER
-User.where(name: params[:name])
-# Or
-User.where("name = ?", params[:name])
-
-# For constantize:
-ALLOWED_MODELS = %w[Post Comment].freeze
-klass = ALLOWED_MODELS.include?(params[:model]) ? params[:model].constantize : Post
-```
-
-## 4. View & Mailer Best Practices
-
-### 4.1 Move Code into Helper or Decorator
-**Smell:** Complex logical blocks or data transformations inside `.html.erb` or `.html.slim` files.
-**Fix:** Move to a Helper or a Decorator (e.g., Draper) if it involves model-view logic.
-
-### 4.2 Use Render Collection
-**Smell:** Looping with `@items.each { |item| render partial: 'item', locals: { item: item } }`.
-**Fix:** Use the optimized collection renderer: `render @items`.
-
-### 4.3 Instance Variables vs Local Variables in Partials
-**Smell:** Using `@user` inside a partial.
-**Fix:** Pass the variable as a local: `render 'user', user: @user`. This makes the partial reusable and independent of the controller's instance variables.
-
-### 4.4 Avoid `time_ago_in_words`
-**Smell:** Using `time_ago_in_words(post.created_at)` for lists of 50+ items.
-**Fix:** This helper is expensive to compute on the server. Use a client-side JS library (e.g., `timeago.js` or `relative-time-element`) or just format the date normally.
-
-### 4.5 Move Mailer Logic into Mailer
-**Smell:** Building complex strings or performing lookups in the controller before passing data to the Mailer.
-**Fix:** Move the logic into the Mailer class; the controller should only pass the necessary IDs or simple objects.
-
-### 4.6 Restrict Auto-generated Routes
-**Smell:** `resources :users` when only `index` and `show` are used.
-**Fix:** Use `only:` or `except:` to limit routes: `resources :users, only: [:index, :show]`.
-
-### 4.7 Remove Empty Helpers
-**Smell:** Unused helper files generated by `rails generate` commands.
-**Fix:** Delete them to reduce noise and confusion.
-
-## 5. Migration & Infrastructure
-
-### 5.1 Always Add Database Indexes
-**Smell:** Tables without indexes on foreign keys or frequently queried columns.
-**Fix:** Ensure `add_index :table, :column` is present in migrations.
-
-### 5.2 Isolating Seed Data
-**Smell:** Using `seeds.rb` for essential configuration data or using migrations for massive data transformation.
-**Fix:** Use `db/seeds.rb` only for development/test data. Use dedicated data migrations or tasks for production data updates.
-
-## 6. Modern Rails 8.0+ Best Practices
-
-### 6.1 Redis-less Architecture
-**Smell:** Defaulting to Redis for every background job or cache.
-**Fix:** Use **Solid Queue**, **Solid Cache**, and **Solid Cable** to reduce infrastructure complexity.
-
-### 6.2 Built-in Authentication
-**Smell:** Pulling in `Devise` for a simple app with standard auth needs.
-**Fix:** Use the Rails 8 `rails generate authentication` command for a lightweight, built-in solution.
-
-### 6.3 Hotwire over SPAs
-**Smell:** Reaching for React/Vue for a feature that can be handled by **Turbo** and **Stimulus**.
-**Fix:** Use Hotwire to keep logic in the monolith and maintain "The Rails Way."
-
-## 7. Naming, Syntax & Error Handling
-
-### 7.1 Frozen String Literals
-**Smell:** Missing magic comment at the top of new files.
-**Fix:** Always include `# frozen_string_literal: true` to prevent string mutation and improve performance.
-
-### 7.2 Squiggly Heredoc (`<<~`)
-**Smell:** Using `<<-` or `"` for multi-line strings that require indentation.
-**Fix:** Use `<<~` to auto-strip leading whitespace based on the least-indented line.
-
-### 7.3 Idiomatic Hash Syntax
-**Smell:** Using `hash = { :key => value }` for symbol keys.
-**Fix:** Use the shorthand `hash = { key: value }`. Use the "rocket" `=>` only for non-symbol keys. Do not mix both in one hash.
-
-### 7.4 `unless` vs `if !`
-**Smell:** Using `if !condition` or `unless condition ... else ...`.
-**Fix:** Use `unless condition` for simple negative checks. If an `else` is needed, use `if`.
-
-### 7.5 Rescue StandardError, not Exception
-**Smell:** `rescue Exception => e`.
-**Fix:** Always rescue `StandardError`. Rescuing `Exception` catches system signals like `SignalException` and `NoMemoryError`.
-
-### 7.6 Use `presence` for Blank Checks
-**Smell:** `name = params[:name].present? ? params[:name] : 'Default'`.
-**Fix:** Use `.presence`: `name = params[:name].presence || 'Default'`.
-
-### 7.7 Ruby Truthiness
-**Smell:** AI-generated code often uses `if x == true` or `if x != nil`.
-**Fix:** Use `if x`. In Ruby, everything except `false` and `nil` is truthy. Conversely, use `if !x` or `unless x` for falsy checks.
-
-## 8. Code Complexity & Smells (RubyCritic / Reek)
-
-### 8.1 Feature Envy
-**Smell:** A method or service that refers to another object's attributes or methods more than its own.
-**Fix:** Move the method to the object it is "envious" of.
-
-```ruby
-# BEFORE (Feature Envy in a Service)
-class OrderTaxCalculator
-  def calculate(order)
-    order.items.sum { |i| i.price * order.user.tax_rate }
+def create
+  @order = Order.new(order_params)
+  @order.user = current_user
+  @order.calculate_total
+  if @order.valid? && @order.payment_method.valid?
+    @order.save
+    OrderMailer.confirmation(@order).deliver_later
+    redirect_to @order
+  else
+    render :new
   end
 end
 
-# AFTER (Moved to Model)
+# AFTER
+def create
+  result = Orders::Create.call(order_params, user: current_user)
+  result.success? ? redirect_to(result.order) : render(:new, locals: { order: result.order })
+end
+```
+
+### 9. Instance Variable in Partial → Pass as Local
+**Smell:** Partial implicitly depends on controller `@variable`.
+**Fix:** Pass as local.
+
+```ruby
+# BEFORE (in view)
+render 'post_summary'
+# BEFORE (in partial) — _post_summary.html.erb
+<%= @post.title %>
+
+# AFTER (in view)
+render 'post_summary', post: @post
+# AFTER (in partial)
+<%= post.title %>
+```
+
+### 10. Controller Params Mutation → Don't Touch Params
+**Smell:** `params[:user][:role] = 'guest'` — mutating the params hash.
+**Fix:** Use `merge` in strong params.
+
+```ruby
+# BEFORE
+params[:user][:role] = 'guest'
+User.create(params[:user])
+
+# AFTER
+def user_params
+  params.require(:user).permit(:name, :email).merge(role: 'guest')
+end
+```
+
+---
+
+## MODELS
+
+### 11. `after_save` for Side Effects → `after_commit`
+**Smell:** Email, job, or cache bust inside `after_save`.
+**Fix:** `after_commit` — fires only when transaction actually commits.
+
+```ruby
+# BEFORE — email fires even if outer transaction rolls back
+after_save :send_confirmation_email
+
+# AFTER
+after_commit :send_confirmation_email, on: :create
+```
+
+### 12. `default_scope` → Named Scopes
+**Smell:** `default_scope { where(active: true) }`.
+**Fix:** Explicit named scope. `default_scope` applies to ALL queries including `update_all`, `delete_all`, joins.
+
+```ruby
+# BEFORE (dangerous)
+default_scope { where(active: true) }
+
+# AFTER
+scope :active, -> { where(active: true) }
+```
+
+### 13. Law of Demeter Violation → Delegate
+**Smell:** `@invoice.user.address.city` — train wreck navigation.
+**Fix:** `delegate` on the model.
+
+```ruby
+# BEFORE
+@invoice.user.address.city  # LoD violation
+
+# AFTER — in Invoice model
+delegate :city, to: :user, prefix: :user, allow_nil: true
+# Usage: @invoice.user_city
+```
+
+### 14. Unnecessary Concern → Inline
+**Smell:** Concern included in exactly one model.
+**Fix:** Inline back into the model.
+**Safety:** `grep -r "include MyConcern"` across the repo.
+
+### 15. Array Enum → Hash Enum
+**Smell:** `enum :status, %i[pending active cancelled]` — order-dependent.
+**Fix:** Hash syntax.
+
+```ruby
+# BEFORE — inserting before 'active' shifts all integer values
+enum :status, %i[pending active cancelled]
+
+# AFTER — explicit, stable
+enum :status, { pending: 0, active: 1, cancelled: 2 }
+```
+
+### 16. `has_and_belongs_to_many` → `has_many :through`
+**Smell:** HABTM — no join model, no callbacks, no extra attributes.
+**Fix:** `has_many :through`.
+
+```ruby
+# BEFORE
+has_and_belongs_to_many :groups
+
+# AFTER
+has_many :memberships
+has_many :groups, through: :memberships
+```
+
+### 17. Missing `dependent:` → Always Set It
+**Smell:** `has_many :orders` without `dependent:`.
+**Fix:** Choose `dependent: :destroy`, `:nullify`, or `:restrict_with_error`.
+
+### 18. Duplicated Validations → Shared Concern (Only If Complex)
+**Smell:** `validates :email, presence: true` copied across `User` and `Admin`.
+**Fix:** Simple validations can duplicate. Extract concern only if logic is complex.
+**Safety:** Ensure `if:`, `unless:`, and error messages match exactly.
+
+### 19. Model Structure Ordering — Consistent Convention
+```ruby
 class Order < ApplicationRecord
-  def tax_total
-    items.sum { |i| i.price * user.tax_rate }
+  # 1. Constants
+  STATUSES = %w[pending active cancelled].freeze
+
+  # 2. attr_* macros
+  attr_accessor :payment_token
+
+  # 3. Enums
+  enum :status, { pending: 0, active: 1, cancelled: 2 }
+
+  # 4. Associations (belongs_to before has_*)
+  belongs_to :user
+  has_many :line_items, dependent: :destroy
+
+  # 5. Validations
+  validates :status, presence: true
+
+  # 6. Callbacks (in execution order)
+  before_validation :normalize_attributes
+  after_commit :broadcast_change, on: [:create, :update]
+
+  # 7. Scopes
+  scope :recent, -> { order(created_at: :desc) }
+
+  # 8. Public methods
+  def total = line_items.sum(&:amount)
+
+  private
+
+  # 9. Private methods
+  def normalize_attributes
+    self.status ||= :pending
   end
 end
 ```
 
-### 8.2 Data Clump
-**Smell:** Passing the same 3-4 variables together across multiple methods (e.g., `start_date`, `end_date`).
-**Fix:** Extract them into a small Value Object or Struct.
+---
 
-### 8.3 Control Parameter (Flag Argument)
-**Smell:** A method that uses a boolean flag to decide which logic to execute.
-**Fix:** Split into two specific methods or use polymorphism.
+## ACTIVE RECORD QUERIES
 
-### 8.4 Utility Function
-**Smell:** A method that doesn't depend on any instance state of the class it lives in.
-**Fix:** Move to a module as a singleton method, or move it closer to the data it operates on.
+### 20. N+1 Query → Eager Load
+**Smell:** Association accessed in loop without preload.
+**Fix:** `includes` / `eager_load`.
 
-### 8.5 ABC Metric & Flog Complexity
-**Smell:** High ABC score (Assignments, Branches, Calls). Typically triggered by long methods with many `if/else` or nested loops.
-**Fix:** Use **Extract Method** to break complex logic into small, single-purpose private methods (≤ 5 lines).
+```ruby
+# BEFORE — N+1
+@posts.each { |p| p.user.name }
 
-## 9. Naming Noise & Verbose Patterns
+# AFTER
+@posts = Post.includes(:user).all
+# Complex join filtering:
+@posts = Post.eager_load(:user).where(users: { active: true })
+```
 
-### 9.1 Verb-Inflation Cluster
-**Smell:** `do_process`, `execute_action`, `perform_task` for the same concept.
-**Fix:** Standardize: `call` for services, `handle` for events, `process` for pipelines.
+### 21. Query Method in Instance Method → Filtered Association
+**Smell:** `where` inside an instance method called in a loop breaks `includes`.
+**Fix:** Filtered association on the model.
 
-### 9.2 Enterprise Suffixes
-**Smell:** `EmailManager`, `PaymentProcessor`, `NotificationCoordinator` for simple classes that do trivial work.
-**Fix:** Use specific, action-oriented names: `EmailSender`, `PaymentCapture`, `NotificationDispatcher`.
+```ruby
+# BEFORE — N+1; includes(:comments) doesn't help
+class Post
+  def active_comments = comments.where(soft_deleted: false)
+end
 
-### 9.3 Explicit Return
-**Smell:** Explicit `return` at the end of every Ruby method.
-**Fix:** Rely on implicit returns; use explicit `return` only for early exits (Guard Clauses).
+# AFTER — includes works
+class Post
+  has_many :active_comments, -> { where(soft_deleted: false) }, class_name: 'Comment'
+end
+# Post.includes(:active_comments)  → 2 queries total
+```
 
-## 10. Architectural Integrity & Method Design (Clean Ruby)
+### 22. `.count` on Loaded Relation → `.size`
+**Smell:** `collection.count` after `each` — fires a SQL COUNT unnecessarily.
 
-### 10.1 Consistent Return Types
-**Smell:** A method returning a `String` in one branch and `nil` or `false` in another.
-**Fix:** Use consistent return types. If returning a collection, return an empty `[]` instead of `nil`. Use the **Null Object Pattern** for optional single objects.
+```ruby
+# BEFORE — two queries
+@messages.each { |m| render m }
+total = @messages.count  # SQL COUNT
 
-### 10.2 Predicate Methods (`?`)
-**Smell:** Methods like `is_admin` or `check_validity`.
-**Fix:** Use Ruby's idiomatic `?` suffix: `admin?` or `valid?`. Ensure they only return `true` or `false`.
+# AFTER — uses in-memory length after each loads
+@messages.each { |m| render m }
+total = @messages.size   # no extra query
+```
 
-### 10.3 Bang Methods (`!`)
-**Smell:** Randomly using `!` on method names to sound "important."
-**Fix:** Use `!` only for methods that modify the receiver in place (e.g., `strip!`) or for "dangerous" versions of methods that raise exceptions on failure (e.g., `save!`).
+### 23. `any?` Before `each` → `present?`
+**Smell:** Two queries when one would do.
 
-### 10.4 Composition Over Inheritance
-**Smell:** Deep inheritance trees (`Admin < PowerUser < User < BaseUser`).
-**Fix:** Use **Composition**. Delegate specific responsibilities to specialized objects. "Has-a" is usually more flexible than "Is-a."
+```ruby
+# BEFORE — SELECT 1 then SELECT *
+if @comments.any?
+  @comments.each { |c| render c }
 
-### 10.5 Simple Initialization
-**Smell:** `initialize` methods that perform complex logic, API calls, or database writes.
-**Fix:** Keep `initialize` strictly for assignment. Move orchestration to a factory method or a `call` method.
+# AFTER — present? loads + caches; each reuses
+if @comments.present?
+  @comments.each { |c| render c }
+```
 
-### 10.6 Parameter Overload
-**Smell:** Methods taking more than 3 positional arguments.
-**Fix:** Use **Keyword Arguments** for clarity, or pass an options hash/Struct for complex configurations.
+### 24. SQL String Interpolation → Placeholders
+**Smell:** User input interpolated into SQL string.
+
+```ruby
+# BEFORE — SQL injection
+User.where("email = '#{params[:email]}'")
+
+# AFTER
+User.where(email: params[:email])
+User.where("email = ?", params[:email])
+```
+
+### 25. `User.all.each` → `find_each`
+
+```ruby
+# BEFORE — loads all into memory
+Person.all.each(&:process)
+
+# AFTER — batches of 1000
+Person.find_each(&:process)
+Person.find_in_batches(batch_size: 500) { |batch| batch.each(&:process) }
+```
+
+### 26. Memoizing `find_by` with `||=` → `defined?`
+
+```ruby
+# BEFORE — fails when result is nil
+def current_user
+  @current_user ||= User.find_by(id: session[:user_id])
+end
+
+# AFTER
+def current_user
+  return @current_user if defined?(@current_user)
+  @current_user = User.find_by(id: session[:user_id])
+end
+```
+
+### 27. Order by `id` → Order by Timestamp
+
+```ruby
+# BEFORE — IDs aren't guaranteed sequential
+scope :chronological, -> { order(id: :asc) }
+
+# AFTER
+scope :chronological, -> { order(created_at: :asc) }
+```
+
+### 28. Missing Index on FK / Query Column
+**Smell:** `user_id`, `status`, `created_at` used in WHERE/ORDER without index.
+**Fix:** Add index in migration.
+
+```ruby
+add_index :orders, :user_id
+add_index :orders, :status
+add_index :orders, [:user_id, :status]
+add_index :orders, :created_at
+```
+
+---
+
+## MIGRATIONS
+
+### 29. Seed Data in Migration → `db/seeds.rb`
+
+```ruby
+# BEFORE — breaks on db:schema:load
+class AddDefaultRoles < ActiveRecord::Migration[7.0]
+  def up
+    Role.create!(name: 'admin')
+  end
+end
+
+# AFTER — db/seeds.rb
+Role.find_or_create_by!(name: 'admin')
+```
+
+### 30. Bare App Model in Migration → Migration Model Class
+
+```ruby
+# BEFORE — breaks if User changes
+def up
+  User.where(old_status: 'inactive').update_all(status: 'archived')
+end
+
+# AFTER
+class MigrationUser < ActiveRecord::Base
+  self.table_name = :users
+end
+def up
+  MigrationUser.where(old_status: 'inactive').update_all(status: 'archived')
+end
+```
+
+### 31. Multiple Column Changes → `bulk: true`
+
+```ruby
+# BEFORE — each add_column is a separate ALTER TABLE (lock per column)
+change_table :users do |t|
+  t.string :phone
+  t.string :country
+end
+
+# AFTER — single ALTER TABLE
+change_table :users, bulk: true do |t|
+  t.string :phone
+  t.string :country
+end
+```
+
+---
+
+## NAMING NOISE
+
+### 32. Verb-Inflation Cluster → Standardize on One Verb
+**Smell:** `do_process`, `execute_action`, `perform_task`, `run_operation` for same concept.
+**Fix:** One verb per concept: `call` for services, `handle` for events, `process` for pipelines.
+
+### 33. Meaningless Variable Names (Reek: UncommunicativeVariableName)
+**Smell:** `x`, `tmp`, `data`, `obj`, `result` with no domain meaning.
+**Fix:** Use domain terms: `invoice`, `payment_record`, `parsed_response`.
+
+---
+
+## SECURITY
+
+### 34. `rescue Exception` → `rescue StandardError`
+
+```ruby
+# BEFORE — swallows Ctrl+C, SIGTERM, NoMemoryError
+rescue Exception => e
+
+# AFTER
+rescue StandardError => e
+# Better: rescue specific exceptions first
+rescue ActiveRecord::RecordNotFound, ArgumentError => e
+```
+
+### 35. Silent `save` → `save!` or Check Return Value
+
+```ruby
+# BEFORE — silent failure
+@order.save
+
+# AFTER
+@order.save!  # raises ActiveRecord::RecordInvalid
+# or
+unless @order.save
+  Rails.logger.error(@order.errors.full_messages)
+  raise OrderSaveError
+end
+```
+
+### 36. `Time.now` → `Time.current`
+
+```ruby
+Time.now              # Bad — system timezone
+Time.parse(str)       # Bad — system timezone
+Time.current          # Good — respects Rails time zone config
+Time.zone.now         # Good
+Time.zone.parse(str)  # Good
+```
+
+---
+
+## TIMEOUTS
+
+### 37. HTTP Client Without Timeout
+
+```ruby
+# BEFORE — hangs indefinitely
+Faraday.new(url)
+Net::HTTP.get(url)
+
+# AFTER
+Faraday.new(url, request: { open_timeout: 2, timeout: 5 })
+Net::HTTP.start(host, port, open_timeout: 2, read_timeout: 5) { |http| ... }
+```
+
+### 38. Redis Without Timeout
+
+```ruby
+# BEFORE
+Redis.new(url: ENV['REDIS_URL'])
+
+# AFTER
+Redis.new(url: ENV['REDIS_URL'], connect_timeout: 1, timeout: 1)
+```
+
+### 39. `after_save` Email / Job → Background + `after_commit`
+
+```ruby
+# BEFORE — fires inside transaction, blocks request thread
+after_save :send_email
+
+# AFTER — async, only after commit
+after_commit :enqueue_email_job, on: :create
+
+def enqueue_email_job
+  ConfirmationMailer.with(user: self).deliver_later
+end
+```
+
+---
+
+## CLEAN RUBY GUIDELINES
+For comprehensive clean code guidelines on naming conventions, classes, logic, method design, and refactoring/TDD in Ruby, refer to:
+- [Clean Ruby Reference Guide](Clean%20Ruby.md)
 
