@@ -57,6 +57,8 @@ PATTERNS = {
         "empty_wrapper_component": re.compile(
             r'const\s+(\w+)\s*=\s*\(\s*\{\s*children\s*\}\s*\)\s*=>\s*<\w+[^>]*>\{children\}</\w+>'
         ),
+        "non_null_assertion": re.compile(r'\w+!\.'),
+        "numeric_enum": re.compile(r'\benum\s+\w+\s*\{'),
     },
     "python": {
         "abc_overkill": re.compile(r'class\s+\w+\s*\(\s*ABC\s*\)\s*:'),
@@ -100,7 +102,7 @@ def detect_smells(file_path: Path, content: str) -> List[Dict[str, Any]]:
             risk = 1
             if lang == "ruby" and ("callback" in content.lower() or "before_save" in content or "before_action" in content):
                 risk = 4
-            elif name in ("trivial_service", "one_method_class", "empty_wrapper_component", "abc_overkill", "premature_interface"):
+            elif name in ("trivial_service", "one_method_class", "empty_wrapper_component", "abc_overkill", "premature_interface", "non_null_assertion", "numeric_enum"):
                 risk = 2
             elif name in ("nested_if_pyramid", "else_after_return"):
                 risk = 2

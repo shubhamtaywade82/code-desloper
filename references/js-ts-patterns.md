@@ -1,162 +1,125 @@
 # JavaScript / TypeScript / React — AI Slop Patterns & Idiomatic Fixes
 
-## 1. TypeScript & Type Safety
+## 1. Advanced TypeScript & Type Safety
 
-### 1.1 The `any` Crutch
-
-**Smell:** Using `any` to bypass the type system.
-**Fix:** Use `unknown` with type narrowing (Zod, Type Guards).
-**Safety check:** Ensure runtime validation is present if the data source is external.
+### 1.1 Making Illegal States Unrepresentable
+**Smell:** "Boolean Soup" (e.g., `{ isLoading: boolean, error: string | null }`).
+**Fix:** Use **Discriminated Unions** (The "Kind" Pattern). This ensures that you can't have `data` and `error` at the same time.
 
 ```typescript
 // BEFORE (AI slop)
-function processUser(data: any) {
-  console.log(data.id.toUpperCase()); // Runtime error if id is missing or not a string
-}
-
-// AFTER (idiomatic)
-interface User { id: string; }
-function processUser(data: unknown) {
-  if (data && typeof data === 'object' && 'id' in data && typeof data.id === 'string') {
-    console.log(data.id.toUpperCase());
-  }
-}
-```
-
-### 1.2 "Stringly" Typing
-
-**Smell:** Using `string` for variables with a discrete set of valid values.
-**Fix:** Use Union Types or Template Literal Types.
-
-```typescript
-// BEFORE
-type Status = string; // "loading", "success", "error"
-
-// AFTER
-type Status = 'loading' | 'success' | 'error';
-```
-
-### 1.3 Discriminated Unions for State
-
-**Smell:** "Boolean Soup" (e.g., `{ isLoading: boolean, error: string | null }`).
-**Fix:** Use a discriminated union to represent mutually exclusive states.
-
-```typescript
-// BEFORE
 interface State { isLoading: boolean; error: string | null; data: any; }
 
-// AFTER
-type State<T> =
+// AFTER (idiomatic)
+type State<T> = 
   | { status: 'loading' }
   | { status: 'error'; message: string }
   | { status: 'success'; data: T };
 ```
 
-### 1.4 Numeric Enums
-
-**Smell:** Standard `enum` which can accept arbitrary numbers.
-**Fix:** Use `as const` objects or String Unions.
+### 1.2 Type Narrowing (The "Fish" Pattern)
+**Smell:** Manually casting with `as` or using `any` when dealing with union types.
+**Fix:** Use **Type Predicates** (`arg is T`) or the `in` operator to safely narrow types.
 
 ```typescript
 // BEFORE
-enum Direction { Up, Down }
+function move(animal: Fish | Bird) {
+  (animal as Fish).swim(); // Dangerous cast
+}
 
 // AFTER
-const Direction = { Up: 'UP', Down: 'DOWN' } as const;
-type Direction = typeof Direction[keyof typeof Direction];
+const isFish = (pet: Fish | Bird): pet is Fish => {
+  return 'swim' in pet;
+};
+
+if (isFish(pet)) {
+  pet.swim(); // TS knows pet is Fish here
+}
 ```
 
-## 2. React Anti-Patterns
+### 1.3 Domain Primitives (Branded Types)
+**Smell:** Using `string` or `number` for every ID, making it easy to pass a `UserId` where an `OrderId` is expected.
+**Fix:** Use **Branded Types** (Opaque types) for critical domain primitives.
 
-### 2.1 Redundant useMemo / useCallback
+```typescript
+// AFTER
+type UserId = string & { readonly __brand: 'UserId' };
+type OrderId = string & { readonly __brand: 'OrderId' };
+```
 
-**Smell:** Memoizing trivial values or functions without a performance bottleneck.
-**Fix:** Remove. React's re-render is often cheaper than memoization overhead.
+### 1.4 Runtime Validation at Boundaries
+**Smell:** Trusting that API responses match your TypeScript interfaces exactly.
+**Fix:** Use **Zod** or similar libraries to validate data at the system boundary (API calls, LocalStorage).
 
-### 2.2 Derived State
+```typescript
+// AFTER
+const UserSchema = z.object({ id: z.string(), email: z.string().email() });
+const data = UserSchema.parse(await response.json());
+type User = z.infer<typeof UserSchema>;
+```
 
-**Smell:** Syncing props to state using `useEffect`.
-**Fix:** Compute at render time.
+## 2. Modern React Architecture (2025)
+
+### 2.1 Separation of Concerns (Server vs. Client)
+**Smell:** Components that handle data fetching, complex business logic, and UI rendering in one file.
+**Fix:** Follow the **Layered Approach**:
+- **Server Components (Data):** Fetch data and handle security.
+- **Client Components (UI):** Handle interactivity and local state.
+- **Custom Hooks (Logic):** Encapsulate reusable stateful logic (the "Modern Container").
+
+### 2.2 Compound Components (The "API" Pattern)
+**Smell:** "Prop Explosion" where a component takes 20+ props to configure internal parts.
+**Fix:** Use **Compound Components** with the Context API to provide a flexible, expressive JSX API.
 
 ```tsx
-// BEFORE
-const [fullName, setFullName] = useState('');
-useEffect(() => { setFullName(`${first} ${last}`); }, [first, last]);
-
-// AFTER
-const fullName = `${first} ${last}`;
+// USAGE
+<Tabs defaultValue="home">
+  <Tabs.List>
+    <Tabs.Trigger value="home">Home</Tabs.Trigger>
+  </Tabs.List>
+  <Tabs.Content value="home">Content</Tabs.Content>
+</Tabs>
 ```
 
-### 2.3 Object/Array Props as Dependencies
+### 2.3 The "Slot" Pattern
+**Smell:** Hardcoding sub-components inside a layout, making it non-reusable.
+**Fix:** Use the `children` prop or specific "slot" props (`renderHeader`, `footer`) to inject UI.
 
-**Smell:** Passing an inline object `style={{ color: 'red' }}` to a memoized component.
-**Fix:** Move outside the component or use `useMemo`.
+### 2.4 Suspense & Error Boundaries
+**Smell:** Manually managing `isLoading` and `isError` flags in every component.
+**Fix:** Use **React Suspense** for loading states and **Error Boundaries** for failures at the layout level.
 
-## 3. AI-Specific Logic Smells
+## 3. State Management & Performance
 
-### 3.1 Async Array Callback Trap
+### 3.1 Server vs. UI State
+**Smell:** Storing API data in `Zustand` or `Redux` and manually managing synchronization.
+**Fix:** Use **TanStack Query** (React Query) for server state (caching, retries) and **Zustand** for lightweight global UI state.
 
-**Smell:** Mapping over an array with an async function and forgetting `Promise.all`.
-**Fix:** Use `Promise.all`.
+### 3.2 Derived State (Render Time)
+**Smell:** Syncing props to state using `useEffect`.
+**Fix:** Compute derived values during render. Use `useMemo` only for genuine bottlenecks.
 
-```typescript
-// BEFORE (Returns array of Promises)
-const results = items.map(async (item) => await process(item));
+### 3.3 Virtualization for Large Data
+**Smell:** Rendering lists of >100 items directly, causing lag.
+**Fix:** Use **`react-window`** or **`TanStack Virtual`** to render only the visible window.
 
-// AFTER
-const results = await Promise.all(items.map(item => process(item)));
-```
+## 4. AI-Specific "Slop" & Logic Smells
 
-### 3.2 Silent Error Swallowing
+### 4.1 Async Array Callback Trap
+**Smell:** `items.map(async ...)` which returns an array of unresolved Promises.
+**Fix:** Use `await Promise.all(items.map(...))`.
 
-**Smell:** Empty `catch (e) {}` blocks.
-**Fix:** Always log, report, or handle the error.
+### 4.2 Silent Error Swallowing
+**Smell:** Empty `catch (e) {}` blocks or generic "Something went wrong" without logging.
+**Fix:** Always log to a monitoring service (Sentry) and provide actionable user feedback.
 
-### 3.3 Deep Nesting vs. Guard Clauses
+### 4.3 Redundant DTOs & Interfaces
+**Smell:** Interfaces that repeat API shapes exactly without adding type safety or mapping.
+**Fix:** Inline types or use `z.infer` to keep a single source of truth.
 
-**Smell:** Deeply nested `if/else` structures.
-**Fix:** Use early returns (Guard Clauses).
-
-```typescript
-// BEFORE
-function save(data) {
-  if (data) {
-    if (data.isValid) {
-      // Logic...
-    }
-  }
-}
-
-// AFTER
-function save(data) {
-  if (!data || !data.isValid) return;
-  // Logic...
-}
-```
-
-## 4. Architectural Smells
-
-### 4.1 One-Method Manager Class
-
-**Smell:** A class with one public method that wraps a single fetch call.
-**Fix:** Replace with a plain async function.
-
-### 4.2 Utility Duplication
-
-**Smell:** `formatDate` defined in multiple files.
-**Fix:** Consolidate into a shared utility module.
-
-### 4.3 Redundant DTOs
-
-**Smell:** Interfaces that mirror API responses exactly with no transformation.
-**Fix:** Remove unless mapping is required.
-
-## 5. Output Consistency
-
-**Rules for Cleanup:**
-
-- Use **Arrow Functions** for components and utilities.
-- Use **ES6+ features** (optional chaining `?.`, nullish coalescing `??`).
-- Trust **Type Inference** for simple assignments.
-- Annotate **Public API** return types and parameters.
-- **Co-locate** types with logic.
+## 5. Engineering Standards
+- **Contract First:** Define types/schemas before implementation.
+- **Immutability:** Use `const` by default; use `readonly` for props and arrays.
+- **Named Exports:** Avoid `default` exports to improve refactoring and grep-ability.
+- **No Lint Disables:** Fix the type issue; do not use `// @ts-ignore` or `any`.
+- **Early Returns:** Use Guard Clauses to flatten functions.

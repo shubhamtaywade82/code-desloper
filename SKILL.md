@@ -76,13 +76,14 @@ Keep ActiveRecord responsibilities clear — models handle persistence + validat
 **Modern Ruby Idioms:** Use `# frozen_string_literal: true`, squiggly heredocs (`<<~`), shorthand hash syntax (`key: value`), and prefer `unless` (without `else`) for negative conditions.
 **Code Complexity:** Identify and refactor "Feature Envy," "Data Clumps," and high ABC metric methods using **Extract Method**.
 
-JavaScript / TypeScript
-Remove wrapper classes around plain functions — replace new ApiManager().fetch() with fetchData() if no state is managed.
-Reduce nested callback chains — flatten to early returns or async/await.
-Consolidate utility duplication — identical helper functions across files → single utility module.
-Replace vague types with strict domain types — delete any, unknown wrappers, and redundant interface mirrors of API responses unless boundary mapping is needed.
-Remove redundant React layers — useMemo / useCallback with no dependency changes, prop-drilling through empty wrapper components, state that can be derived.
-Avoid premature abstraction in React components — a 20-line component does not need a custom hook extracted unless it is reused.
+### JavaScript / TypeScript
+- **Modern TypeScript Core:** Let TypeScript infer simple types; only annotate function parameters, return types of public APIs, and complex shapes. Enable strict compile-time checks in `tsconfig.json`.
+- **Advanced Patterns & Safety:** Eliminate `any` types by using `unknown` with runtime type guards or Zod. Enforce exhaustiveness checking for union types using the `never` type. Use discriminated unions for complex state.
+- **React Dashboard Architect:** Strong type component props and Event handlers. Never use non-null assertions (`!`) on Context; throw descriptive errors instead. Build reusable generic components `Component<T>` for tables, select inputs, and cards.
+- **Type System Master:** Leverage type-level programming (conditional types, mapped types, template literal types, `infer`) to generate precise types dynamically and eliminate interface duplication.
+- **Safe API Boundaries:** Validate external API payloads at boundaries using Zod rather than casting with `as MyType`.
+- **Clean Architecture & Logic:** Eliminate trivial one-method wrapper classes in favor of plain async functions. Consolidate duplicate utilities, flatten deeply nested callback chains into early returns, and use `Promise.all` for async array mappings.
+- **React Render Optimization:** Remove redundant `useMemo`/`useCallback` hooks where there is no performance bottleneck, and compute derived state at render time instead of using `useEffect`.
 Output Format
 Every response must follow this structure:
 plain
