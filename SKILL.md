@@ -453,8 +453,12 @@ For each approved target:
 | [references/Clean Ruby.md](references/Clean%20Ruby.md) | Comprehensive Clean Ruby guide: naming, methods, logic, classes, refactoring, TDD |
 | [references/ruby-style-guide.md](references/ruby-style-guide.md) | Ruby Style Guide rules + RuboCop checks + YARD documentation rules |
 | [references/rails-style-guide.md](references/rails-style-guide.md) | Rails Style Guide rules + RuboCop Rails checks + quick antipattern checklist |
+| [references/rspec-patterns.md](references/rspec-patterns.md) | RSpec testing anti-patterns: mocks/stubs, shared examples, and request/system test smells |
 | [references/js-ts-patterns.md](references/js-ts-patterns.md) | 17 JS/TS/React anti-patterns: classes, React hooks, control flow, utilities, code smells |
 | [references/Clean JS-TS.md](references/Clean%20JS-TS.md) | Comprehensive Clean JavaScript/TypeScript guide: variables, functions, encapsulation, SOLID, testing |
+| [references/nextjs-patterns.md](references/nextjs-patterns.md) | Next.js anti-patterns: Server Components, App Router caching, Server Actions, and layout state |
+| [references/nodejs-express-patterns.md](references/nodejs-express-patterns.md) | Node.js and Express anti-patterns: middleware, error handling, route structure, and performance |
+| [references/jest-vitest-patterns.md](references/jest-vitest-patterns.md) | Jest and Vitest testing anti-patterns: mocking, async tests, isolation, and assertion safety |
 | [references/python-patterns.md](references/python-patterns.md) | 20 Python/Django/FastAPI anti-patterns: classes, exceptions, types, async, Django, testing |
 | [references/code-smells.md](references/code-smells.md) | Full Fowler smell taxonomy + Reek/Flog/RubyCritic metrics with Ruby/TS examples |
 | [references/yard-documentation.md](references/yard-documentation.md) | YARD tag reference, when to add/remove/update docs, good vs. bad YARD examples |
