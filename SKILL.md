@@ -65,7 +65,7 @@ Cleanup would alter API contracts Breaking change
 Code is ambiguous and tests are absent No safety proof
 Cross-file validation logic May be used by forms/APIs you cannot see
 Stack-Specific Cleanup Rules
-Ruby / Rails
+### Ruby / Rails
 Collapse trivial service objects into model methods, query objects, or controller flow if there is no real orchestration (no transactions, no multi-model coordination, no external calls).
 Remove unnecessary concerns only if the shared code is used in exactly one place or is pure duplication.
 Prefer POROs only when there is real orchestration — multi-step workflows, external API calls, complex conditional logic.
@@ -73,6 +73,9 @@ Use scopes for query logic — move where chains from services/controllers into 
 Simplify callbacks — if before_save does business logic that belongs in an explicit workflow step, flag it; do not move it without checking all call paths.
 Remove duplicated validations / formatting helpers only when they are exact duplicates and tests cover all models involved.
 Keep ActiveRecord responsibilities clear — models handle persistence + validations; controllers handle HTTP; services handle orchestration.
+**Modern Ruby Idioms:** Use `# frozen_string_literal: true`, squiggly heredocs (`<<~`), shorthand hash syntax (`key: value`), and prefer `unless` (without `else`) for negative conditions.
+**Code Complexity:** Identify and refactor "Feature Envy," "Data Clumps," and high ABC metric methods using **Extract Method**.
+
 JavaScript / TypeScript
 Remove wrapper classes around plain functions — replace new ApiManager().fetch() with fetchData() if no state is managed.
 Reduce nested callback chains — flatten to early returns or async/await.
@@ -154,7 +157,7 @@ plain
 
 ## Reference Materials
 
-- [Ruby / Rails Patterns](references/ruby-rails-patterns.md) — Detailed Rails-specific anti-patterns and idiomatic replacements.
+- [Ruby / Rails Patterns](references/ruby-rails-patterns.md) — Detailed Rails-specific anti-patterns, RubyCritic smells, and idiomatic replacements.
 - [JS / TS Patterns](references/js-ts-patterns.md) — Detailed JavaScript, TypeScript, and React anti-patterns.
 - [Python Patterns](references/python-patterns.md) — Common Python anti-patterns and clean code practices.
 - [Go Patterns](references/go-patterns.md) — Idiomatic Go refactoring and anti-patterns.

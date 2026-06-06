@@ -38,6 +38,8 @@ PATTERNS = {
             r'class\s+\w+(Manager|Processor|Handler|Coordinator|Executor)\b'
         ),
         "explicit_return": re.compile(r'\breturn\s+.*?\n\s*end\b', re.MULTILINE),
+        "hash_rocket": re.compile(r':\w+\s*=>'),
+        "missing_frozen_string": re.compile(r'^(?!#\s*frozen_string_literal:\s*true)', re.MULTILINE),
     },
     "js_ts": {
         "one_method_class": re.compile(
