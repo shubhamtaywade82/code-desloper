@@ -288,6 +288,10 @@ klass = ALLOWED_MODELS.include?(params[:model]) ? params[:model].constantize : P
 **Smell:** `name = params[:name].present? ? params[:name] : 'Default'`.
 **Fix:** Use `.presence`: `name = params[:name].presence || 'Default'`.
 
+### 7.7 Ruby Truthiness
+**Smell:** AI-generated code often uses `if x == true` or `if x != nil`.
+**Fix:** Use `if x`. In Ruby, everything except `false` and `nil` is truthy. Conversely, use `if !x` or `unless x` for falsy checks.
+
 ## 8. Code Complexity & Smells (RubyCritic / Reek)
 
 ### 8.1 Feature Envy
@@ -339,4 +343,30 @@ end
 ### 9.3 Explicit Return
 **Smell:** Explicit `return` at the end of every Ruby method.
 **Fix:** Rely on implicit returns; use explicit `return` only for early exits (Guard Clauses).
+
+## 10. Architectural Integrity & Method Design (Clean Ruby)
+
+### 10.1 Consistent Return Types
+**Smell:** A method returning a `String` in one branch and `nil` or `false` in another.
+**Fix:** Use consistent return types. If returning a collection, return an empty `[]` instead of `nil`. Use the **Null Object Pattern** for optional single objects.
+
+### 10.2 Predicate Methods (`?`)
+**Smell:** Methods like `is_admin` or `check_validity`.
+**Fix:** Use Ruby's idiomatic `?` suffix: `admin?` or `valid?`. Ensure they only return `true` or `false`.
+
+### 10.3 Bang Methods (`!`)
+**Smell:** Randomly using `!` on method names to sound "important."
+**Fix:** Use `!` only for methods that modify the receiver in place (e.g., `strip!`) or for "dangerous" versions of methods that raise exceptions on failure (e.g., `save!`).
+
+### 10.4 Composition Over Inheritance
+**Smell:** Deep inheritance trees (`Admin < PowerUser < User < BaseUser`).
+**Fix:** Use **Composition**. Delegate specific responsibilities to specialized objects. "Has-a" is usually more flexible than "Is-a."
+
+### 10.5 Simple Initialization
+**Smell:** `initialize` methods that perform complex logic, API calls, or database writes.
+**Fix:** Keep `initialize` strictly for assignment. Move orchestration to a factory method or a `call` method.
+
+### 10.6 Parameter Overload
+**Smell:** Methods taking more than 3 positional arguments.
+**Fix:** Use **Keyword Arguments** for clarity, or pass an options hash/Struct for complex configurations.
 
