@@ -3,6 +3,7 @@
 ## 1. TypeScript & Type Safety
 
 ### 1.1 The `any` Crutch
+
 **Smell:** Using `any` to bypass the type system.
 **Fix:** Use `unknown` with type narrowing (Zod, Type Guards).
 **Safety check:** Ensure runtime validation is present if the data source is external.
@@ -23,6 +24,7 @@ function processUser(data: unknown) {
 ```
 
 ### 1.2 "Stringly" Typing
+
 **Smell:** Using `string` for variables with a discrete set of valid values.
 **Fix:** Use Union Types or Template Literal Types.
 
@@ -35,6 +37,7 @@ type Status = 'loading' | 'success' | 'error';
 ```
 
 ### 1.3 Discriminated Unions for State
+
 **Smell:** "Boolean Soup" (e.g., `{ isLoading: boolean, error: string | null }`).
 **Fix:** Use a discriminated union to represent mutually exclusive states.
 
@@ -43,13 +46,14 @@ type Status = 'loading' | 'success' | 'error';
 interface State { isLoading: boolean; error: string | null; data: any; }
 
 // AFTER
-type State<T> = 
+type State<T> =
   | { status: 'loading' }
   | { status: 'error'; message: string }
   | { status: 'success'; data: T };
 ```
 
 ### 1.4 Numeric Enums
+
 **Smell:** Standard `enum` which can accept arbitrary numbers.
 **Fix:** Use `as const` objects or String Unions.
 
@@ -65,10 +69,12 @@ type Direction = typeof Direction[keyof typeof Direction];
 ## 2. React Anti-Patterns
 
 ### 2.1 Redundant useMemo / useCallback
+
 **Smell:** Memoizing trivial values or functions without a performance bottleneck.
 **Fix:** Remove. React's re-render is often cheaper than memoization overhead.
 
 ### 2.2 Derived State
+
 **Smell:** Syncing props to state using `useEffect`.
 **Fix:** Compute at render time.
 
@@ -82,12 +88,14 @@ const fullName = `${first} ${last}`;
 ```
 
 ### 2.3 Object/Array Props as Dependencies
+
 **Smell:** Passing an inline object `style={{ color: 'red' }}` to a memoized component.
 **Fix:** Move outside the component or use `useMemo`.
 
 ## 3. AI-Specific Logic Smells
 
 ### 3.1 Async Array Callback Trap
+
 **Smell:** Mapping over an array with an async function and forgetting `Promise.all`.
 **Fix:** Use `Promise.all`.
 
@@ -100,10 +108,12 @@ const results = await Promise.all(items.map(item => process(item)));
 ```
 
 ### 3.2 Silent Error Swallowing
+
 **Smell:** Empty `catch (e) {}` blocks.
 **Fix:** Always log, report, or handle the error.
 
 ### 3.3 Deep Nesting vs. Guard Clauses
+
 **Smell:** Deeply nested `if/else` structures.
 **Fix:** Use early returns (Guard Clauses).
 
@@ -127,19 +137,24 @@ function save(data) {
 ## 4. Architectural Smells
 
 ### 4.1 One-Method Manager Class
+
 **Smell:** A class with one public method that wraps a single fetch call.
 **Fix:** Replace with a plain async function.
 
 ### 4.2 Utility Duplication
+
 **Smell:** `formatDate` defined in multiple files.
 **Fix:** Consolidate into a shared utility module.
 
 ### 4.3 Redundant DTOs
+
 **Smell:** Interfaces that mirror API responses exactly with no transformation.
 **Fix:** Remove unless mapping is required.
 
 ## 5. Output Consistency
+
 **Rules for Cleanup:**
+
 - Use **Arrow Functions** for components and utilities.
 - Use **ES6+ features** (optional chaining `?.`, nullish coalescing `??`).
 - Trust **Type Inference** for simple assignments.
