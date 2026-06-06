@@ -159,7 +159,9 @@ plain
 ## Reference Materials
 
 - [Ruby / Rails Patterns](references/ruby-rails-patterns.md) — Detailed Rails-specific anti-patterns, RubyCritic smells, and idiomatic replacements.
+- [Clean Ruby Guide](references/Clean%20Ruby.md) — Carleton DiLeo's guidelines on Ruby classes, logic, method design, and refactoring.
 - [JS / TS Patterns](references/js-ts-patterns.md) — Detailed JavaScript, TypeScript, and React anti-patterns.
+- [Clean JS/TS Guide](references/Clean%20JS-TS.md) — Industry-standard clean code guidelines for variables, functions, SOLID, and concurrency in JS/TS.
 - [Python Patterns](references/python-patterns.md) — Common Python anti-patterns and clean code practices.
 - [Go Patterns](references/go-patterns.md) — Idiomatic Go refactoring and anti-patterns.
 - [Safety Checklist](references/safety-checklist.md) — Pre-refactor safety checks and risk assessment guide.
